@@ -103,15 +103,12 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
-          auth-type: "oidc"
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure App Service for Bot
         id: deploy-to-bot-app-service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'lmb-robot-discord-bot' # !!! REPLACE WITH YOUR BOT'S APP SERVICE NAME !!!
+          app-name: 'QuoteItBot' # !!! REPLACE WITH YOUR BOT'S APP SERVICE NAME !!!
           slot-name: 'Production'
           package: ./deploy_bot_content_final
