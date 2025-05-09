@@ -21,9 +21,6 @@ jobs:
       contents: read
 
     # NO job-level default working-directory, as operations are at repo root
-    # defaults:
-    #   run:
-    #     working-directory: ./LMBs-robot-services # REMOVED
 
     steps:
       - name: Checkout repository
@@ -34,8 +31,8 @@ jobs:
         with:
           node-version: '20.x'
 
-      - name: Debug: Show current directory (Repo Root) and list files
-        working-directory: ${{ github.workspace }} # Explicitly ensure we are at repo root
+      - name: Debug - Show current directory and list files
+        working-directory: ${{ github.workspace }}
         run: |
           echo "--- Current directory (should be Repo Root): $(pwd) ---"
           echo "--- Listing files in Repo Root: ---"
@@ -44,7 +41,7 @@ jobs:
           cat package.json || echo "package.json not found in $(pwd)"
 
       - name: Install Bot Dependencies
-        working-directory: ${{ github.workspace }} # Run npm ci at repo root
+        working-directory: ${{ github.workspace }}
         run: npm ci
 
       # - name: Build Bot Application (if applicable)
@@ -52,7 +49,7 @@ jobs:
       #   run: npm run build --if-present
 
       - name: Prepare Bot Deployment Package
-        working-directory: ${{ github.workspace }} # Run copy commands from repo root
+        working-directory: ${{ github.workspace }}
         run: |
           echo "--- Preparing deployment package from $(pwd) ---"
           mkdir -p ${{ github.workspace }}/deployment_package_bot_staging
@@ -70,7 +67,7 @@ jobs:
           ls -la ${{ github.workspace }}/deployment_package_bot_staging
 
       - name: Zip Bot Deployment Package
-        working-directory: ${{ github.workspace }} # Run zip command from repository root
+        working-directory: ${{ github.workspace }}
         run: |
           echo "--- Zipping contents of deployment_package_bot_staging from $(pwd) ---"
           cd deployment_package_bot_staging
@@ -116,6 +113,6 @@ jobs:
         id: deploy-to-bot-app-service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'lmb-robot-discord-bot' # !!! REPLACE WITH YOUR BOT'S APP SERVICE NAME !!!
+          app-name: 'QuoteItBot'
           slot-name: 'Production'
           package: ./deploy_bot_content_final
