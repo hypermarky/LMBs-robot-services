@@ -1,12 +1,20 @@
+name: Build and Deploy Discord Bot (LMBs-robot-services) to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'LMBs-robot-services/**'
+      - '.github/workflows/main_quoteitbot.yml' # Assuming this is the filename of THIS workflow
+  workflow_dispatch:
+
 jobs:
-  build-and-package-discord-bot:
+  build_and_package_bot: # Renamed job for clarity
     name: Build and Package Discord Bot
     runs-on: ubuntu-latest
     permissions:
       contents: read
-
-    # NO job-level default working-directory for now, to be more explicit in each step.
-    # This makes it easier to reason about paths.
 
     steps:
       - name: Checkout repository
@@ -17,53 +25,103 @@ jobs:
         with:
           node-version: '20.x'
 
-      - name: Debug: Show repo root and bot subfolder contents
+      - name: Debug Information
+        # This step runs at the repository root by default
         run: |
           echo "--- GitHub Workspace (Repo Root): ${{ github.workspace }} ---"
           echo "--- Listing files in Repo Root: ---"
           ls -la ${{ github.workspace }}
-          echo "--- Listing files in Bot Subfolder (LMBs-robot-services): ---"
-          ls -la ${{ github.workspace }}/LMBs-robot-services || echo "Bot subfolder not found or empty"
-          echo "--- Contents of bot's package.json: ---"
-          cat ${{ github.workspace }}/LMBs-robot-services/package.json || echo "Bot package.json not found"
+          echo "--- Checking Bot Subfolder (LMBs-robot-services): ---"
+          if [ -d "${{ github.workspace }}/LMBs-robot-services" ]; then
+            echo "Bot subfolder ${{ github.workspace }}/LMBs-robot-services exists."
+            echo "--- Listing files in Bot Subfolder: ---"
+            ls -la ${{ github.workspace }}/LMBs-robot-services
+            echo "--- Contents of bot's package.json: ---"
+            cat ${{ github.workspace }}/LMBs-robot-services/package.json || echo "Bot package.json not found in subfolder."
+          else
+            echo "Bot subfolder ${{ github.workspace }}/LMBs-robot-services DOES NOT EXIST."
+            echo "--- Attempting to list files in current directory (repo root) for package.json: ---"
+            ls -la . # Current directory (repo root)
+            cat ./package.json || echo "No package.json found at repo root either."
+            exit 1 # Fail if the assumed bot subfolder isn't there
+          fi
 
-      - name: Install dependencies for bot
-        working-directory: ${{ github.workspace }}/LMBs-robot-services # Explicit full path
+      - name: Install Bot Dependencies
+        working-directory: ${{ github.workspace }}/LMBs-robot-services # Explicitly run npm ci in the bot's subfolder
         run: npm ci
 
-      # - name: Build Bot Application (if needed)
+      # - name: Build Bot Application (if applicable)
       #   working-directory: ${{ github.workspace }}/LMBs-robot-services
       #   run: npm run build --if-present
 
-      - name: Prepare deployment package for bot
-        working-directory: ${{ github.workspace }}/LMBs-robot-services # Run copy commands from within the bot's folder
+      - name: Prepare Bot Deployment Package
+        working-directory: ${{ github.workspace }}/LMBs-robot-services # Operations are relative to this folder
         run: |
           echo "--- Preparing deployment package from $(pwd) ---"
-          # Create staging dir in the workspace root (one level up from LMBs-robot-services if it's a subfolder)
-          mkdir -p ${{ github.workspace }}/deployment_package_bot 
+          # Create staging dir in the workspace root
+          mkdir -p ${{ github.workspace }}/deployment_package_bot_staging
           
           echo "--- Copying application files to staging directory... ---"
-          cp package.json ${{ github.workspace }}/deployment_package_bot/
-          cp package-lock.json ${{ github.workspace }}/deployment_package_bot/
-          cp index.js ${{ github.workspace }}/deployment_package_bot/
-          if [ -d "utils" ]; then cp -r utils ${{ github.workspace }}/deployment_package_bot/; fi
-          if [ -d "commands" ]; then cp -r commands ${{ github.workspace }}/deployment_package_bot/; fi
+          cp package.json ${{ github.workspace }}/deployment_package_bot_staging/
+          cp package-lock.json ${{ github.workspace }}/deployment_package_bot_staging/
+          cp index.js ${{ github.workspace }}/deployment_package_bot_staging/
+          
+          # Copy directories if they exist
+          if [ -d "utils" ]; then cp -r utils ${{ github.workspace }}/deployment_package_bot_staging/; fi
+          if [ -d "commands" ]; then cp -r commands ${{ github.workspace }}/deployment_package_bot_staging/; fi
           # Add other necessary files/folders from ./LMBs-robot-services
 
-          echo "--- Contents of staging directory (deployment_package_bot): ---"
-          ls -la ${{ github.workspace }}/deployment_package_bot
+          echo "--- Contents of staging directory (deployment_package_bot_staging): ---"
+          ls -la ${{ github.workspace }}/deployment_package_bot_staging
 
-      - name: Zip the deployment package
-        working-directory: ${{ github.workspace }} # Run zip from the repo root
+      - name: Zip Bot Deployment Package
+        working-directory: ${{ github.workspace }} # Run zip command from repository root
         run: |
-          echo "--- Zipping contents of deployment_package_bot from $(pwd) ---"
-          cd deployment_package_bot
-          zip -r ../discord-bot-release.zip ./*
-          cd .. 
-          echo "--- Created discord-bot-release.zip ---"
+          echo "--- Zipping contents of deployment_package_bot_staging from $(pwd) ---"
+          cd deployment_package_bot_staging
+          zip -r ../discord-bot-release.zip ./*  # Creates zip in the parent (repo root)
+          cd ..
+          echo "--- Created discord-bot-release.zip in repository root ---"
 
-      - name: Upload bot artifact
+      - name: Upload Bot Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: discord-bot-app
-          path: discord-bot-release.zip
+          name: discord-bot-app-artifact # Artifact name
+          path: discord-bot-release.zip   # Path to the zip file from repo root
+
+  deploy_bot_to_azure: # Renamed job for clarity
+    name: Deploy Discord Bot to Azure App Service
+    runs-on: ubuntu-latest
+    needs: build_and_package_bot # Depends on the build job
+    environment:
+      name: 'Production_Bot'
+      url: ${{ steps.deploy-to-bot-app-service.outputs.webapp-url }} # Matched step id
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download Bot Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: discord-bot-app-artifact # Matches upload artifact name
+
+      - name: Unzip Bot Artifact
+        run: |
+          unzip discord-bot-release.zip -d ./deploy_bot_content_final
+          echo "--- Contents of deploy_bot_content_final after unzip: ---"
+          ls -la ./deploy_bot_content_final
+
+      - name: Login to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
+
+      - name: Deploy to Azure App Service for Bot
+        id: deploy-to-bot-app-service # Matched for output URL
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'lmb-robot-discord-bot' # !!! REPLACE WITH YOUR BOT'S APP SERVICE NAME !!!
+          slot-name: 'Production'
+          package: ./deploy_bot_content_final
