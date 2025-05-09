@@ -1,28 +1,13 @@
-# .github/workflows/deploy-discord-bot-to-azure.yml
-
-name: Build and Deploy Discord Bot to Azure App Service
-
-on:
-  push:
-    branches:
-      - main # Trigger on pushes to the main branch
-    paths: # Only trigger if changes are in the bot's folder or this workflow file
-      - 'LMBs-robot-services/**' # Matches the assumed subfolder for your bot
-      - '.github/workflows/deploy-discord-bot-to-azure.yml'
-  workflow_dispatch: # Allows manual triggering
-
 jobs:
   build-and-package-discord-bot:
     name: Build and Package Discord Bot
     runs-on: ubuntu-latest
     permissions:
-      contents: read # Required for actions/checkout
+      contents: read
 
-    # Set a default working directory for all run steps in this job
-    # This assumes your bot's package.json is in 'LMBs-robot-services/'
     defaults:
       run:
-        working-directory: ./LMBs-robot-services
+        working-directory: ./LMBs-robot-services # Default for run steps in this job
 
     steps:
       - name: Checkout repository
@@ -31,97 +16,46 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x' # Recommended LTS version for Node.js
+          node-version: '20.x'
 
       - name: Debug: Show current directory and list files
-        # This will run inside ./LMBs-robot-services due to the 'defaults'
-        run: |
-          echo "--- Current directory (should be bot's subfolder): $(pwd) ---"
-          echo "--- Listing files in bot's subfolder: ---"
+        run: | # Inherits working-directory from defaults
+          echo "--- Current directory (should be ./LMBs-robot-services): $(pwd) ---"
+          echo "--- Listing files: ---"
           ls -la
           echo "--- Contents of package.json: ---"
           cat package.json || echo "package.json not found in $(pwd)"
 
       - name: Install dependencies
-        # This runs inside ./LMBs-robot-services
-        run: npm ci # 'npm ci' is preferred for CI for clean, reproducible installs
+        run: npm ci # Inherits working-directory from defaults
 
-      # If your bot has a build step (e.g., TypeScript compilation), add it here:
-      # - name: Build Bot Application
-      #   run: npm run build --if-present
+      # - name: Build Bot Application # Optional build step
+      #   run: npm run build --if-present # Inherits working-directory
 
-      # The 'npm run test --if-present' line is removed.
-
-      - name: Prepare deployment package (excluding node_modules and .env)
-        # This runs inside ./LMBs-robot-services
-        run: |
+      - name: Prepare deployment package
+        run: | # Inherits working-directory (./LMBs-robot-services)
           echo "--- Preparing deployment package from $(pwd) ---"
-          # Create a staging directory in the repository root (one level up from current working dir)
           mkdir -p ${{ github.workspace }}/deployment_package_bot
-          
-          echo "--- Copying application files to staging directory... ---"
-          # Copy essential files from the current directory (LMBs-robot-services)
+          echo "--- Copying application files to ${{ github.workspace }}/deployment_package_bot ---"
           cp package.json ${{ github.workspace }}/deployment_package_bot/
           cp package-lock.json ${{ github.workspace }}/deployment_package_bot/
           cp index.js ${{ github.workspace }}/deployment_package_bot/
-          
           if [ -d "utils" ]; then cp -r utils ${{ github.workspace }}/deployment_package_bot/; fi
           if [ -d "commands" ]; then cp -r commands ${{ github.workspace }}/deployment_package_bot/; fi
-          # Add other necessary files/folders from ./LMBs-robot-services
-
-          echo "--- Contents of staging directory (deployment_package_bot): ---"
+          echo "--- Contents of staging directory: ---"
           ls -la ${{ github.workspace }}/deployment_package_bot
 
       - name: Zip the deployment package
-        # This step needs to run from the repository root to correctly path the zip output
-        # So, we override the default working-directory for this specific step
-        working-directory: ${{ github.workspace }} # Run from repo root
+        working-directory: ${{ github.workspace }} # Override default: run from repo root
         run: |
-          echo "--- Zipping contents of deployment_package_bot from $(pwd) ---"
-          cd deployment_package_bot # Go into the staging directory
-          zip -r ../discord-bot-release.zip ./* # Zip its contents, creates zip in repo root
-          cd .. # Go back to repo root
-          echo "--- Created discord-bot-release.zip in repository root ---"
+          echo "--- Zipping from $(pwd) ---"
+          cd deployment_package_bot
+          zip -r ../discord-bot-release.zip ./*
+          cd ..
+          echo "--- Created discord-bot-release.zip ---"
 
       - name: Upload bot artifact
         uses: actions/upload-artifact@v4
         with:
           name: discord-bot-app
-          path: discord-bot-release.zip # Path is relative to repo root
-
-  deploy-discord-bot-to-azure:
-    name: Deploy Discord Bot to Azure App Service
-    runs-on: ubuntu-latest
-    needs: build-and-package-discord-bot
-    environment:
-      name: 'Production_Bot'
-      url: ${{ steps.deploy-to-bot-app.outputs.webapp-url }}
-    permissions:
-      id-token: write
-
-    steps:
-      - name: Download bot artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: discord-bot-app
-
-      - name: Unzip bot artifact
-        run: |
-          unzip discord-bot-release.zip -d ./deploy_bot_content
-          echo "--- Contents of deploy_bot_content after unzip: ---"
-          ls -la ./deploy_bot_content
-
-      - name: Login to Azure (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }} # Ensure these secrets are correctly named
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
-
-      - name: Deploy to Azure App Service for Bot
-        id: deploy-to-bot-app
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'lmb-robot-discord-bot' # CHANGE TO YOUR BOT'S APP SERVICE NAME
-          slot-name: 'Production'
-          package: ./deploy_bot_content
+          path: discord-bot-release.zip
