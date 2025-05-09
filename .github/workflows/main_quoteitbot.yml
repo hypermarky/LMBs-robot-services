@@ -106,7 +106,7 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
-          client-secret: ${{ secrets.AZUREAPPSERVICE_CLIENTSECRET_BOT }}
+          use-oidc: true
 
       - name: Deploy to Azure App Service for Bot
         id: deploy-to-bot-app-service
