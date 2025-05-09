@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'LMBs-robot-services/**'
-      - '.github/workflows/main_quoteitbot.yml' # Assuming this is the workflow's own filename
+      - '.github/workflows/main_quoteitbot.yml'
   workflow_dispatch:
 
 jobs:
@@ -18,23 +18,23 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./LMBs-robot-services
+        working-directory: LMBs-robot-services
 
-    steps: # Example: Indented by 4 spaces
-      - name: Checkout repository # Example: Indented by 6 spaces (4 + 2)
-        uses: actions/checkout@v4 # Example: Indented by 8 spaces (6 + 2)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js # Example: Indented by 6 spaces (must match previous "- name:")
-        uses: actions/setup-node@v4 # Example: Indented by 8 spaces
-        with: # Example: Indented by 8 spaces
-          node-version: '20.x' # Example: Indented by 10 spaces
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
 
-      - name: Debug:Show current directory and list files # << THIS LINE. Must be indented by 6 spaces
-        run: | # Example: Indented by 8 spaces
-          echo "--- Current directory: $(pwd) ---" # Example: Indented by 10 spaces
-          # ...
+      - name: Debug:Show current directory and list files
+        run: |
+          echo "--- Current directory: $(pwd) ---"
+          ls -la
 
-      - name: Install dependencies # Example: Indented by 6 spaces
+      - name: Install dependencies
         run: npm ci
 
       - name: Prepare deployment package
@@ -59,39 +59,3 @@ jobs:
         with:
           name: discord-bot-app
           path: discord-bot-release.zip
-
-  deploy-discord-bot-to-azure:
-    name: Deploy Discord Bot to Azure App Service
-    runs-on: ubuntu-latest
-    needs: build-and-package-discord-bot
-    environment:
-      name: 'Production_Bot'
-      url: ${{ steps.deploy-to-bot-app.outputs.webapp-url }}
-    permissions:
-      id-token: write
-
-    steps:
-      - name: Download bot artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: discord-bot-app
-
-      - name: Unzip bot artifact
-        run: |
-          unzip discord-bot-release.zip -d ./deploy_bot_content
-          ls -la ./deploy_bot_content
-
-      - name: Login to Azure (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
-
-      - name: Deploy to Azure App Service for Bot
-        id: deploy-to-bot-app
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'lmb-robot-discord-bot' # !!! CHANGE TO YOUR BOT'S ACTUAL APP SERVICE NAME !!!
-          slot-name: 'Production'
-          package: ./deploy_bot_content
