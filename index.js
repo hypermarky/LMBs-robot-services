@@ -1,70 +1,86 @@
-import dotenv from 'dotenv'
-dotenv.config()
+import dotenv from 'dotenv';
+dotenv.config();
 
-import {
-    Client,
-    GatewayIntentBits,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle, 
-} from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Events, ActivityType } from 'discord.js'; // Added ActivityType
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import * as quoteManager from './utils/quoteManager.js';
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.DirectMessages,
         GatewayIntentBits.MessageContent,
     ],
 });
 
-client.login(process.env.DISCORD_TOKEN);
+client.commands = new Collection();
+const commandsPath = path.join(process.cwd(), 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-const btn = new ButtonBuilder()
-    .setCustomId('test')
-    .setLabel('Do you want to test this?')
-    .setStyle(ButtonStyle.Primary);
-
-const row = new ActionRowBuilder()
-    .addComponents(btn);
-
-client.on("messageCreate", async (message) => {
-
-
-    if (!message?.author.bot) {
+// Asynchronously load all commands
+async function loadCommands() {
+    for (const file of commandFiles) {
+        const filePath = path.join(commandsPath, file);
+        const fileUrl = pathToFileURL(filePath).href;
         try {
-            await message.author.send({
-                content: 'Push my btns!',
-                components: [row] 
-            });
-        } catch (error) {
-            console.error(`Could not send DM to ${message.author.tag} (ID: ${message.author.id}). Error:`, error.message);
+            const commandModule = await import(fileUrl);
 
-            if (error.code === 50007) { 
-                message.reply("I tried to send you a DM, but it seems your DMs are closed. Please enable DMs from server members to use this feature.").catch(console.error);
+            // For slash commands (Chat Input)
+            if (commandModule.data && typeof commandModule.data.name === 'string') {
+                client.commands.set(commandModule.data.name, commandModule);
+                console.log(`[CommandHandler] Loaded SLASH command: ${commandModule.data.name}`);
             }
-        }
-    }
-});
 
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return; // Make sure it's a button interaction
+            // For Context Menu commands
+            if (commandModule.contextMenu && typeof commandModule.contextMenu.name === 'string') {
+                client.commands.set(commandModule.contextMenu.name, commandModule); // Key by context menu name
+                console.log(`[CommandHandler] Loaded CONTEXT MENU command: ${commandModule.contextMenu.name}`);
+            }
 
-    if (interaction.customId === 'test') {
-        try {
-            await interaction.reply('You tested my button bruh!!!!!');
+            if (!commandModule.data && !commandModule.contextMenu) {
+                 console.log(`[WARNING] The command module at ${filePath} is missing "data" (for slash) or "contextMenu" property.`);
+            }
+
         } catch (error) {
-            console.error("Error replying to button interaction:", error);
+            console.error(`[CommandHandler] Error loading command ${filePath}:`, error);
+        }
+    }
+}
+
+
+client.once(Events.ClientReady, async c => { // Make ready event async
+    await loadCommands(); // Ensure commands are loaded before bot is fully ready
+    console.log(`Ready! Logged in as ${c.user.tag}`);
+    client.user.setActivity('/quote help', { type: ActivityType.Listening }); // Use ActivityType enum
+});
+
+client.on(Events.InteractionCreate, async interaction => {
+    // We only care about command interactions (chat input, user context, message context)
+    if (!interaction.isCommand() && !interaction.isContextMenuCommand()) return;
+
+    const command = client.commands.get(interaction.commandName);
+
+    if (!command) {
+        console.error(`No command matching "${interaction.commandName}" was found.`);
+        // Optionally reply to user, but be careful with ephemeral messages here.
+        // It's often better to just log if a command truly isn't registered.
+        // await interaction.reply({ content: `Command not found.`, ephemeral: true }).catch(console.error);
+        return;
+    }
+
+    try {
+        await command.execute(interaction); // The execute function in quote.js handles different interaction types
+    } catch (error) {
+        console.error(`Error executing ${interaction.commandName}:`, error);
+        const replyOptions = { content: 'There was an error while executing this command!', flags: 64 }; // 64 for ephemeral
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(replyOptions).catch(console.error);
+        } else {
+            await interaction.reply(replyOptions).catch(console.error);
         }
     }
 });
 
-client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
-
-client.on('error', console.error);
+client.login(process.env.DISCORD_TOKEN);
