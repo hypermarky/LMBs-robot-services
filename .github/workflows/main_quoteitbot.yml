@@ -1,14 +1,16 @@
+# .github/workflows/main_quoteitbot.yml (or your bot's workflow filename)
+
 name: Build and Deploy Discord Bot to Azure App Service
 
 on:
   push:
     branches:
       - main
-    # Paths filter can be simplified or removed if the repo only contains the bot
-    paths:
-      - '**' # Trigger on any change in the repo
-      - '!README.md' # Optional: Exclude README changes from triggering
-      - '.github/workflows/main_quoteitbot.yml'
+    paths: # Adjust if your bot code isn't at the root or if you have other projects
+      - '**'
+      - '!.github/workflows/**' # Don't trigger on changes to other workflows
+      - '.github/workflows/main_quoteitbot.yml' # Trigger on changes to this workflow itself
+      - '!README.md'
   workflow_dispatch:
 
 jobs:
@@ -17,8 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-
-    # NO job-level default working-directory, as operations are at repo root
 
     steps:
       - name: Checkout repository
@@ -29,8 +29,8 @@ jobs:
         with:
           node-version: '20.x'
 
-      - name: Debug - Show current directory and list files
-        working-directory: ${{ github.workspace }}
+      - name: Debug - Show current directory (Repo Root) and list files
+        working-directory: ${{ github.workspace }} # Explicitly run at repo root
         run: |
           echo "--- Current directory (should be Repo Root): $(pwd) ---"
           echo "--- Listing files in Repo Root: ---"
@@ -39,7 +39,7 @@ jobs:
           cat package.json || echo "package.json not found in $(pwd)"
 
       - name: Install Bot Dependencies
-        working-directory: ${{ github.workspace }}
+        working-directory: ${{ github.workspace }} # Assumes package.json is at repo root
         run: npm ci
 
       # - name: Build Bot Application (if applicable)
@@ -47,9 +47,10 @@ jobs:
       #   run: npm run build --if-present
 
       - name: Prepare Bot Deployment Package
-        working-directory: ${{ github.workspace }}
+        working-directory: ${{ github.workspace }} # Operations from repo root
         run: |
           echo "--- Preparing deployment package from $(pwd) ---"
+          # Create staging dir also in the workspace root
           mkdir -p ${{ github.workspace }}/deployment_package_bot_staging
           
           echo "--- Copying application files to staging directory... ---"
@@ -65,7 +66,7 @@ jobs:
           ls -la ${{ github.workspace }}/deployment_package_bot_staging
 
       - name: Zip Bot Deployment Package
-        working-directory: ${{ github.workspace }}
+        working-directory: ${{ github.workspace }} # Run zip command from repository root
         run: |
           echo "--- Zipping contents of deployment_package_bot_staging from $(pwd) ---"
           cd deployment_package_bot_staging
@@ -84,10 +85,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_and_package_bot
     environment:
-      name: 'Production_Bot'
+      name: 'Production_Bot' # Or your Azure environment name
       url: ${{ steps.deploy-to-bot-app-service.outputs.webapp-url }}
     permissions:
-      id-token: write
+      id-token: write # Required for OIDC Azure login
 
     steps:
       - name: Download Bot Artifact
@@ -98,17 +99,21 @@ jobs:
       - name: Unzip Bot Artifact
         run: |
           unzip discord-bot-release.zip -d ./deploy_bot_content_final
+          echo "--- Contents of deploy_bot_content_final after unzip: ---"
           ls -la ./deploy_bot_content_final
 
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
+          # Removed: auth-type: "oidc" 
 
       - name: Deploy to Azure App Service for Bot
         id: deploy-to-bot-app-service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'QuoteItBot' # !!! REPLACE WITH YOUR BOT'S APP SERVICE NAME !!!
-          slot-name: 'Production'
-          package: ./deploy_bot_content_final
+          app-name: 'QuoteIt' # !!! REPLACE WITH YOUR BOT'S ACTUAL APP SERVICE NAME !!!
+          slot-name: 'Production' # Or your deployment slot
+          package: ./deploy_bot_content_final # Directory containing unzipped package
