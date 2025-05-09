@@ -103,24 +103,14 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          # Option 1: Using Service Principal with Client Secret (most common)
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-          # OR Option 2: Use if you have separate credentials (uncomment and use this instead of 'creds' above)
-          # client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          # tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          # subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          # client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          # OR Option 3: Using OIDC (Workload Identity Federation)
-          # client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          # tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          # subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          # Enable this for OIDC:
-          # use-oidc: true
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
 
       - name: Deploy to Azure App Service for Bot
         id: deploy-to-bot-app-service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'QuoteItBot' # !!! REPLACE WITH YOUR BOT'S APP SERVICE NAME !!!
+          app-name: 'QuoteItBot'
           slot-name: 'Production'
           package: ./deploy_bot_content_final
