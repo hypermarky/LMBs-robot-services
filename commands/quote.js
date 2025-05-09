@@ -1,7 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionsBitField, ApplicationCommandType, ContextMenuCommandBuilder } from 'discord.js'; // Added ApplicationCommandType and ContextMenuCommandBuilder
 import * as quoteManager from '../utils/quoteManager.js';
 
-// --- Slash Command Definition ---
 export const data = new SlashCommandBuilder()
     .setName('quote')
     .setDescription('Manages quotes for the server.')
@@ -31,20 +30,17 @@ export const data = new SlashCommandBuilder()
             .setName('help')
             .setDescription('Shows help information for quote commands.'));
 
-// --- Message Context Menu Command Definition ---
 export const contextMenu = new ContextMenuCommandBuilder()
     .setName('Quote This Message')
-    .setType(ApplicationCommandType.Message); // Crucial: sets this as a message context menu
+    .setType(ApplicationCommandType.Message); 
 
-// --- Execution Logic ---
 export async function execute(interaction) {
     const guildId = interaction.guild.id;
-    const member = interaction.member; // The member who ran the command
+    const member = interaction.member;
 
     try {
-        // --- Handle Message Context Menu for Quoting ---
         if (interaction.isMessageContextMenuCommand() && interaction.commandName === 'Quote This Message') {
-            const targetMessage = interaction.targetMessage; // The message that was right-clicked
+            const targetMessage = interaction.targetMessage;
 
             if (!targetMessage || (!targetMessage.content && targetMessage.embeds.length === 0 && targetMessage.attachments.size === 0)) {
                 return interaction.reply({ content: "Cannot quote an empty message (no text, embeds, or attachments).", ephemeral: true });
@@ -82,17 +78,13 @@ export async function execute(interaction) {
             return interaction.reply({ embeds: [embed] });
         }
 
-        // --- Handle Slash Commands (Chat Input) ---
         if (interaction.isChatInputCommand() && interaction.commandName === 'quote') {
             const subcommand = interaction.options.getSubcommand();
 
             if (subcommand === 'add') {
-                // This is for manual entry via /quote add user:... text:...
                 const quoterUser = interaction.options.getUser('user');
                 const quoteTextContent = interaction.options.getString('text');
 
-                // No need to check for reply here, as this path is for explicit user/text input.
-                // The message context menu handles "quoting an existing message".
 
                 const newQuote = quoteManager.addQuote({
                     text: quoteTextContent,
@@ -101,7 +93,7 @@ export async function execute(interaction) {
                     adderTag: interaction.user.tag,
                     adderId: interaction.user.id,
                     guildId,
-                    originalMessageId: null, // No original message ID for manual entry
+                    originalMessageId: null,
                     context: null,
                 });
 
@@ -117,7 +109,6 @@ export async function execute(interaction) {
                 await interaction.reply({ embeds: [embed] });
 
             } else if (subcommand === 'get') {
-                // ... (get logic remains the same)
                 const query = interaction.options.getString('query');
                 const serverQuotes = quoteManager.getQuotes(guildId);
 
@@ -149,16 +140,14 @@ export async function execute(interaction) {
                     .setFooter({ text: `Quote ID: ${randomQuote.id} | Added by: ${randomQuote.adderTag}` })
                     .setTimestamp(new Date(randomQuote.timestamp));
 
-                if (randomQuote.originalMessageId && randomQuote.channelId) { // Assuming you store channelId
+                if (randomQuote.originalMessageId && randomQuote.channelId) { 
                      embed.addFields({name: 'Original Message', value: `[Jump to Message](https://discord.com/channels/${guildId}/${randomQuote.channelId}/${randomQuote.originalMessageId})`});
                 } else if (randomQuote.originalMessageId) {
-                    // Fallback if channelId wasn't stored, link might not work if bot is in many channels
                     embed.addFields({name: 'Original Message Context', value: `From an earlier message (ID: ${randomQuote.originalMessageId})`});
                 }
                 await interaction.reply({ embeds: [embed] });
 
             } else if (subcommand === 'list') {
-                // ... (list logic remains the same)
                 const userFilter = interaction.options.getUser('user');
                 let serverQuotes = quoteManager.getQuotes(guildId);
 
@@ -188,7 +177,6 @@ export async function execute(interaction) {
 
 
             } else if (subcommand === 'delete') {
-                // ... (delete logic remains the same)
                 const quoteId = interaction.options.getInteger('id');
                 const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
                 const result = quoteManager.deleteQuote(quoteId, guildId, interaction.user.id, isAdmin);
@@ -197,7 +185,6 @@ export async function execute(interaction) {
 
 
             } else if (subcommand === 'help') {
-                // ... (help logic remains the same)
                 const helpEmbed = new EmbedBuilder()
                     .setColor(0x00AE86)
                     .setTitle('Quote Bot Help')

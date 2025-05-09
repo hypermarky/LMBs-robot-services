@@ -33,7 +33,7 @@ function getQuotes(guildId) {
     return quotes.filter(q => q.guildId === guildId);
 }
 
-function addQuote({ text, quoterName, quoterId, adderTag, adderId, guildId, originalMessageId, channelId, context }) { // Added channelId
+function addQuote({ text, quoterName, quoterId, adderTag, adderId, guildId, originalMessageId, context }) {
     const newQuote = {
         id: quotes.length > 0 ? Math.max(0, ...quotes.map(q => q.id || 0)) + 1 : 1,
         text,
@@ -44,8 +44,7 @@ function addQuote({ text, quoterName, quoterId, adderTag, adderId, guildId, orig
         timestamp: new Date().toISOString(),
         guildId,
         originalMessageId,
-        channelId,
-        context,
+        context, 
     };
     quotes.push(newQuote);
     saveQuotes();

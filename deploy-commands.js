@@ -1,4 +1,5 @@
-import { REST, Routes } from 'discord.js';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord.js';
 import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,48 +11,67 @@ const commands = [];
 const commandsPath = path.join(process.cwd(), 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    const fileUrl = pathToFileURL(filePath).href;
-    const commandModule = await import(fileUrl);
+const clientId = process.env.CLIENT_ID;
+const guildId = process.env.GUILD_ID; 
+const token = process.env.DISCORD_TOKEN;
 
-    // Register slash command data
-    if ('data' in commandModule && commandModule.data) { // Check if data exists
-        commands.push(commandModule.data.toJSON());
-        console.log(`[Deploy] Added slash command: ${commandModule.data.name}`);
-    }
-    // Register context menu command data
-    if ('contextMenu' in commandModule && commandModule.contextMenu) { // Check if contextMenu exists
-        commands.push(commandModule.contextMenu.toJSON());
-        console.log(`[Deploy] Added context menu command: ${commandModule.contextMenu.name}`);
-    }
+async function loadAndPrepareCommands() {
+    for (const file of commandFiles) {
+        const filePath = path.join(commandsPath, file);
+        const fileUrl = pathToFileURL(filePath).href;
+        try {
+            const commandModule = await import(fileUrl);
 
-    if (!('data' in commandModule && commandModule.data) && !('contextMenu' in commandModule && commandModule.contextMenu)) {
-         console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "contextMenu" property.`);
+            if (commandModule.data) { 
+                commands.push(commandModule.data.toJSON());
+                console.log(`Prepared slash command: ${commandModule.data.name}`);
+            }
+            if (commandModule.contextMenu) { 
+                commands.push(commandModule.contextMenu.toJSON());
+                console.log(`Prepared context menu command: ${commandModule.contextMenu.name}`);
+            }
+        } catch (error) {
+            console.error(`Error loading command from ${filePath} for deployment:`, error);
+        }
     }
 }
 
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+async function deploy() {
+    await loadAndPrepareCommands();
 
-(async () => {
+    if (!token) {
+        console.error('DISCORD_TOKEN is not set in .env file. Cannot deploy commands.');
+        return;
+    }
+    if (!clientId) {
+        console.error('CLIENT_ID is not set in .env file. Cannot deploy commands.');
+        return;
+    }
+
+    const rest = new REST({ version: '10' }).setToken(token);
+
     try {
-        console.log(`Started refreshing ${commands.length} application commands.`);
-        // ... (rest of your deploy logic remains the same)
-        let route;
-        if (process.env.GUILD_ID && process.env.CLIENT_ID) {
-            route = Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID);
-            console.log('Deploying commands to GUILD:', process.env.GUILD_ID);
-        } else if (process.env.CLIENT_ID) {
-            route = Routes.applicationCommands(process.env.CLIENT_ID);
-            console.log('Deploying commands GLOBALLY.');
+        console.log(`Started refreshing ${commands.length} application (/) and context menu commands.`);
+
+        if (!guildId) {
+            console.warn('GUILD_ID not set in .env. Deploying globally. This can take up to an hour to show.');
+             await rest.put(
+                Routes.applicationCommands(clientId),
+                { body: commands },
+            );
+            console.log('Successfully reloaded application commands globally.');
         } else {
-            console.error("CLIENT_ID is missing in your .env file. Cannot deploy commands.");
-            return;
+            await rest.put(
+                Routes.applicationGuildCommands(clientId, guildId),
+                { body: commands },
+            );
+            console.log(`Successfully reloaded application commands for guild ${guildId}.`);
         }
 
-        const data = await rest.put(route, { body: commands });
-        console.log(`Successfully reloaded ${data.length} application commands.`);
+
     } catch (error) {
         console.error(error);
     }
-})();
+}
+
+deploy();
