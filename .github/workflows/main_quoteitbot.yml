@@ -106,11 +106,12 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BOT }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BOT }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BOT }}
+          client-secret: ${{ secrets.AZUREAPPSERVICE_CLIENTSECRET_BOT }}
 
       - name: Deploy to Azure App Service for Bot
         id: deploy-to-bot-app-service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'QuoteItBot'
+          app-name: 'QuoteItBot' # !!! REPLACE WITH YOUR BOT'S APP SERVICE NAME !!!
           slot-name: 'Production'
           package: ./deploy_bot_content_final
