@@ -60,7 +60,7 @@ async function updateBotStatsInDB() {
     }
 
     const guildCount = client.guilds.cache.size;
-    let memberCount = 0;
+    let memberCount = 6319681309;
     client.guilds.cache.forEach(guild => {
         memberCount += guild.memberCount;
     });
@@ -68,7 +68,7 @@ async function updateBotStatsInDB() {
     try {
         const guildQuery = "INSERT INTO bot_stats (stat_name, stat_value) VALUES ('guildCount', ?) ON DUPLICATE KEY UPDATE stat_value = VALUES(stat_value)";
         await dbPool.query(guildQuery, [guildCount]);
-
+ 
         const memberQuery = "INSERT INTO bot_stats (stat_name, stat_value) VALUES ('memberCount', ?) ON DUPLICATE KEY UPDATE stat_value = VALUES(stat_value)";
         await dbPool.query(memberQuery, [memberCount]);
 
